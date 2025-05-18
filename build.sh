@@ -9,19 +9,21 @@ DISTRO=$(source /etc/os-release && echo ${NAME})
 KERVER=$(make kernelversion)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 COMMIT_HEAD=$(git log --oneline -1)
-ANYKERNEL3_DIR="${HOME}"/kernel/anykernel
+ANYKERNEL3_DIR==anykernel
 CLANG_VERSION=clang-r547379
 TC_DIR=prebuilts/clang/host/linux-x86
 OUT_DIR=out/android13-5.15/dist
+BOT_MSG_URL="https://api.telegram.org/bot$TOKEN/sendMessage"
+BOT_BUILD_URL="https://api.telegram.org/bot$TOKEN/sendDocument"
 
 # Repo URL
-ANYKERNEL_REPO="https://github.com/zhantech/Anykernel3.git"
-ANYKERNEL_BRANCH="topaz"
+ANYKERNEL_REPO="https://github.com/iDeadXD/Ai-AnyKernel3"
+ANYKERNEL_BRANCH="gki"
 
 # Costumize
-KERNEL="Pringgodani"
-RELEASE_VERSION="3.5"
-DEVICE="Topaz-Tapas-Xun-Sapphire-Sapphiren"
+KERNEL="AiKernel"
+RELEASE_VERSION=""
+DEVICE="Xun"
 BENGAL_DEVICE="Bengal"
 KERNELNAME="${KERNEL}-${RELEASE_VERSION}-${BRANCH}-${DEVICE}-$(TZ=Asia/Jakarta date +%y%m%d)"
 BENGAL_KERNELNAME="${KERNEL}-${RELEASE_VERSION}-${BRANCH}-${BENGAL_DEVICE}-$(TZ=Asia/Jakarta date +%y%m%d)"
@@ -32,6 +34,30 @@ function clean() {
 rm -rf "$HOME"/kernel
 cd ..
 rm -rf out
+}
+
+tg_post_msg()
+{
+	curl -s -H "Content-Type: application/x-www-form-urlencoded" -X POST "$BOT_MSG_URL" -d chat_id="$CHATID" \
+	-d "disable_web_page_preview=true" \
+	-d "parse_mode=html" \
+	-d text="$1"
+
+}
+
+##----------------------------------------------------------##
+
+tg_post_build()
+{
+	# Post MD5Checksum alongwith for easeness
+	MD5CHECK=$(md5sum "$1" | cut -d' ' -f1)
+
+	# Show the Checksum alongwith caption
+	curl --progress-bar -F document=@"$1" "$BOT_BUILD_URL" \
+	-F chat_id="$CHATID"  \
+	-F "disable_web_page_preview=true" \
+	-F "parse_mode=Markdown" \
+	-F caption="$2 | *MD5 Checksum : *\`$MD5CHECK\`"
 }
 
 function cloning() {
@@ -47,32 +73,14 @@ cd ..
 fi
 
 # Telegram
-CHATIDQ="-1001308839345"
-CHATID="-1001308839345" # Group/channel chatid (use rose/userbot to get it)
-TELEGRAM_TOKEN="5988732593:AAEn7SJOoh5x8VWtevuPGO25-TRnygaLsoM" # Get from botfather
-
-# Export Telegram.sh
-TELEGRAM_DIR="${HOME}"/kernel/telegram
-if ! [ -d "${TELEGRAM_DIR}" ]; then
-    git clone https://github.com/zhantech/telegram.sh/ "${TELEGRAM_DIR}"
-fi
-
+CHATID="-1002301602471" # Group/channel chatid (use rose/userbot to get it)
+TELEGRAM_TOKEN="8113908305:AAHwOJTOxaWvcTrdIjS0aIypqCzdyCjRR7M" # Get from botfather
 }
 
 function compile_kernel() {
-TELEGRAM="${TELEGRAM_DIR}"/telegram
-
-tg_cast() {
-    "${TELEGRAM}" -t "${TELEGRAM_TOKEN}" -c "${CHATID}" -H \
-    "$(
-        for POST in "${@}"; do
-            echo "${POST}"
-        done
-    )"
-}
 
 # Starting
-tg_cast "<b>STARTING KERNEL BUILD</b>" \
+tg_post_msg "<b>STARTING KERNEL BUILD</b>" \
     "Docker OS: ${DISTRO}" \
     "Device: ${DEVICE}" \
     "Kernel Version : ${KERVER}" \
@@ -89,7 +97,7 @@ LTO=thin BUILD_CONFIG=$KERNEL_DIR/build.config.gki.aarch64 build/build.sh
         END=$(TZ=Asia/Jakarta date +"%s")
         DIFF=$(( END - START ))
         echo -e "Kernel compilation failed, See buildlog to fix errors"
-        tg_cast "Build for ${DEVICE} <b>failed</b> in $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)! Check Instance for errors @zh4ntech"
+        tg_post_msg "Build for ${DEVICE} <b>failed</b> in $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)! Check Instance for errors @zh4ntech"
         exit 1
     fi
 
@@ -112,47 +120,6 @@ sha1sum "$HOME"/kernel/$FINAL_KERNEL_ZIP
 sha1sum "$HOME"/kernel/$FINAL_KERNEL_IMG
 }
 
-function upload-tg() {
-    "${TELEGRAM}" -f "$HOME"/kernel/"$FINAL_KERNEL_ZIP" -t "${TELEGRAM_TOKEN}" -c "${CHATIDQ}" 
-echo "Kernel uploaded to telegram..."
-
-END=$(TZ=Asia/Jakarta date +"%s")
-DIFF=$(( END - START ))
-tg_cast "Build for ${DEVICE} with ${CLANG_VERSION} <b>succeed</b> took $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)! by @zh4ntech"
-}
-
-function upload-sf() {
-while true; do
-
-read -p "Do you want upload kernel to Sourceforge? (y/n) " yn
-
-case $yn in 
-	[yY] )
-    echo ".........................."
-    echo ".     Uploading Kernel   ."
-    echo ".........................."
-
-scp "$HOME"/kernel/$FINAL_KERNEL_IMG zhantech@frs.sourceforge.net:/home/frs/project/zhantech/Pringgodani/bengal
-scp "$HOME"/kernel/$FINAL_KERNEL_ZIP zhantech@frs.sourceforge.net:/home/frs/project/zhantech/Pringgodani/topaz-xun
-
-echo "Kernel uploaded to sourceforge..."
-
-rm -rf "$HOME"/kernel
-
-    echo ".........................."
-    echo ".     Build Finished     ."
-    echo ".........................."
-		break;;
-	[nN] )
-    echo ".........................."
-    echo ".     Build Finished     ."
-    echo ".........................."
-		exit;;
-esac
-
-done
-}
-
 # eksekusi
 
     echo ".........................."
@@ -171,22 +138,5 @@ compile_kernel
     echo ".     Ziping Kernel      ."
     echo ".........................."
 ziping
-while true; do
 
-read -p "Do you want upload kernel to Telegram? (y/n) " yn
-
-case $yn in 
-	[yY] )
-    echo ".........................."
-    echo ".     Uploading Kernel   ."
-    echo ".........................."
-upload-tg
-upload-sf
-		break;;
-	[nN] )
-upload-sf
-		break;;
-
-esac
-
-done
+tg_post_build $FINAL_KERNEL_ZIP
